@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from fabric.api import task, run
+from fabric.api import run
 
 def _generate_password():
     import string
@@ -12,10 +12,15 @@ def _generate_password():
 def create_mysql_instance(mysql_user, mysql_password, instance_code):
     user = instance_code
     password = _generate_password()
-    cmd = "/usr/bin/mysql -h localhost -u '%s' '--password=%s' -P %s -e \"create database %s; grant all on %s.* to '%s'@'%%' identified by '%s'\"" % (
+    cmd_create_database = "/usr/bin/mysql -h localhost -u '%s' '--password=%s' -P %s -e \"create database %s;\"" % (
         mysql_user, mysql_password, 3306,
-        user, user, user, password,)
-    return run(cmd)
+        user,)
+    cmd_create_user = "/usr/bin/mysql -h localhost -u '%s' '--password=%s' -P %s -e \"grant all on %s.* to '%s'@'%%' identified by '%s';\"" % (
+        mysql_user, mysql_password, 3306,
+        user, user, password,)
+
+    run(cmd_create_database)
+    run(cmd_create_user)
 
 
 

@@ -116,6 +116,7 @@ def start_yigo_instance(instance_code, java_home, java_memory, db_host, db_port,
 
         cmd = ' '.join(args)
         with cd('apps/%s' % (instance_code,)):
+            # Use `sleep 1` to wait the command starting up before fabric closes the ssh connection
             run('$(nohup ' + cmd + ' >& logs/nohup.out < /dev/null & echo $! > tmp/pid) && sleep 1')
 
 

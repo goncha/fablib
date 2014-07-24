@@ -7,10 +7,19 @@ if __name__ == '__main__':
     import fabtasks
     docstring, new_style, classic, default = load_tasks_from_module(fabtasks)
     tasks = new_style if state.env.new_style_tasks else classic
-    print tasks
     state.commands.update(tasks)
-    result = execute('create_mysql_instance', hosts=['root@1.1.2.195'], *['root', 'root', 'u0001'], **{})
+
+    host = 'cloud@1.1.2.195'
+    result = execute('create_mysql_instance', hosts=[host], *['root', 'root', 't1', '3306'], **{})
     print result
+    db_name, db_user, db_password = result[host]
+    result = execute('create_yigo_instance', hosts=[host],
+                     *['t1', 'http://1.1.2.154/software/yigo/config-tutorial-20140721.tar.gz'],
+                     **{})
+    result = execute('start_yigo_instance', hosts=[host],
+                     *['t1', '/opt/jdk1.6.0_43', 256, '1.1.2.195', '3306', db_name, db_user, db_password, 7000],
+                     **{})
+
 
 # Local Variables: **
 # comment-column: 56 **

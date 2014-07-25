@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from exceptions import RuntimeError
+
 from fabric.api import run, cd
+
+
 
 def _generate_password():
     import string
@@ -10,6 +14,31 @@ def _generate_password():
 
 def _mysql_command(cmd):
     return "/usr/bin/mysql -h localhost -u '%s' '--password=%s' -P %s -e \"" + cmd + "\""
+
+
+def delete_mysql_instance(mysql_user, mysql_password, instance_code, mysql_port):
+    """Delete database and user on remote mysql instance."""
+    if is_yigo_instance_running(instance_code):
+        raise RuntimeError("Instance is running")
+
+    user = instance_code
+    database = instance_code
+    # Clean already created instance
+    cmd_drop_user = _mysql_command("drop user '%s'@'%%';") % (
+        mysql_user, mysql_password, mysql_port,
+        user,)
+    cmd_drop_database = _mysql_command("drop database %s;") % (
+        mysql_user, mysql_password, mysql_port,
+        database,)
+    run(cmd_drop_user, quiet=True);
+    run(cmd_drop_database, quiet=True);
+
+
+def delete_yigo_instance(instance_code):
+    if is_yigo_instance_running(instance_code):
+        raise RuntimeException("Instance is running")
+
+    run("rm -rf apps/%s" % (instance_code,), quiet=True)
 
 
 def create_mysql_instance(mysql_user, mysql_password, instance_code, mysql_port):
@@ -22,17 +51,11 @@ def create_mysql_instance(mysql_user, mysql_password, instance_code, mysql_port)
     (database_name, user, password) : tuple
        A tuple of database name, user, password.
     """
+    # Delete existing mysql instance if exists
+    delete_mysql_instance(mysql_user, mysql_password, instance_code, mysql_port)
+
     user = instance_code
     database = instance_code
-    # Clean already created instance
-    cmd_drop_user = _mysql_command("drop user '%s'@'%%';") % (
-        mysql_user, mysql_password, mysql_port,
-        user,)
-    cmd_drop_database = _mysql_command("drop database %s;") % (
-        mysql_user, mysql_password, mysql_port,
-        database,)
-    run(cmd_drop_user, quiet=True);
-    run(cmd_drop_database, quiet=True);
     # Create new instance
     password = _generate_password()
     cmd_create_database = _mysql_command("create database %s;") % (
@@ -53,8 +76,9 @@ def create_mysql_instance(mysql_user, mysql_password, instance_code, mysql_port)
 def create_yigo_instance(instance_code, configs_source, yigo_version="20140721"):
     """Create yigo instance directory layout, install yigo release pack and yigo app config pack.
     The process is completed successfully if no `Exception' raised."""
-    # Clean already created instance
-    run("rm -rf apps/%s" % (instance_code,), quiet=True)
+    # Clean existing yigo instance
+    delete_yigo_instance(instance_code)
+
     # Create new instace
     configs_filename = configs_source.split('/')[-1]
     checksum_filename = configs_filename + '.sha256sum'
@@ -68,9 +92,19 @@ def create_yigo_instance(instance_code, configs_source, yigo_version="20140721")
         run("tar -xf '%s' -C '../configs'" % (configs_filename,))
 
 
+def _get_pid_filename(instance_code):
+    return 'apps/%s/tmp/pid' % (instance_code,)
+
+
+def is_yigo_instance_running(instance_code):
+    pid_filename = _get_pid_filename(instance_code)
+    return run("test -e '%s' && ps -f -p $(<'%s') | grep 'yigo.instance=%s'" %
+               (pid_filename, pid_filename, instance_code,), quiet=True).succeeded
+
+
 def start_yigo_instance(instance_code, java_home, java_memory, db_host, db_port, db_name, db_user, db_password, port):
-    if run("test -e 'apps/%s/tmp/pid' && ps -f -p $(<'apps/%s/tmp/pid') | grep 'yigo.instance=%s'" %
-           (instance_code, instance_code, instance_code,), quiet=True).succeeded:
+    if is_yigo_instance_running(instance_code):
+        print "Instance is running"
         return
     else:
         # Find java command
@@ -118,6 +152,15 @@ def start_yigo_instance(instance_code, java_home, java_memory, db_host, db_port,
         with cd('apps/%s' % (instance_code,)):
             # Use `sleep 1` to wait the command starting up before fabric closes the ssh connection
             run('$(nohup ' + cmd + ' >& logs/nohup.out < /dev/null & echo $! > tmp/pid) && sleep 1')
+
+
+def stop_yigo_instance(instance_code, force=False):
+    signal = 'TERM'
+    if force: signal = 'KILL'
+    pid_filename = _get_pid_filename(instance_code)
+    if is_yigo_instance_running(instance_code):
+        run("kill -s %s $(<'%s') && rm '%s'" % (signal, pid_filename, pid_filename))
+
 
 
 # Local Variables: **
